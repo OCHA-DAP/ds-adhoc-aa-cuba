@@ -25,11 +25,11 @@ gdf_adm0 <- gdf_adm0 %>%
     )
 
 
-gdf_adm0_simp <- st_simplify(
-  gdf_adm0,
-  dTolerance = 5000
-)
-
+# gdf_adm0_simp <- st_simplify(
+#   gdf_adm0,
+#   dTolerance = 5000
+# )
+gdf_adm0_simp <- st_convex_hull(gdf_adm0)
 
 pct_reduction <- 1- mapview::npts(gdf_adm0_simp)/mapview::npts(gdf_adm0)
 
@@ -42,45 +42,75 @@ fc_aoi <- sf_as_ee(x = gdf_adm0_simp)
 
 ic_aoi <- ic$filterBounds(fc_aoi)
 
-# cat("Begin Downloading CHIRPS COGS","\n")
-# ee_imagecollection_to_local(ic = ic_aoi,
-#                             region = fc_aoi$geometry(),
-#                             dsn = file.path(out_dir,"moz_chirps_"),
-#                             via = "drive",
-#                             scale = 5566
-#                               )
-# tic_test <- tic %>%
-#   filter(doy== 3, year %in% c(2021, 2022))
-tic_dekad_labelled <- tic %>% 
-  mutate(
-    dekad_abbr = case_when(
-      year %in% c(1980:1989)~"80s",
-      year %in% c(1990:1999)~"90s",
-      year %in% c(2000:2009)~"2000s",
-      year %in% c(2010:2019)~"2010s",
-      year >= 2020 ~"2020s"
-    )
-  ) 
+
+yrs_unique <- tic$vrt$year |> unique() 
+
+yr_grps <- split(
+  yrs_unique, 
+  ceiling(seq_along(yrs_unique)/3)
+  )
+
+# tic_dekad_labelled <- tic %>% 
+#   mutate(
+#     dekad_abbr = case_when(
+#       year %in% c(1980:1989)~"80s",
+#       year %in% c(1990:1999)~"90s",
+#       year %in% c(2000:2009)~"2000s",
+#       year %in% c(2010:2019)~"2010s",
+#       year >= 2020 ~"2020s"
+#     )
+#   ) 
+
 
 # started at 2:10 pm
-df_rainfall_adm <- unique(tic_dekad_labelled$vrt$dekad_abbr) %>%
+df_rainfall_adm <- yr_grps %>%
   map(
-    \(dekad_tmp){
-      cat("downloading data for year ", dekad_tmp,"\n")
-      tic_temp <- tic_dekad_labelled %>%
+    \(yrs){
+      cat("downloading data for year ", yrs,"\n")
+      tic_temp <- tic %>%
         filter(
-          dekad_abbr == dekad_tmp
+          year %in% yrs
         )
-      ee_extract_tidy(
+      
+      df_tidy <- ee_extract_tidy(
         x = tic_temp,
         y = fc_aoi,
         scale = 5566,
         stat = "mean",
         via = "drive"
       )
+      
+      write_csv(
+        x = df_tidy,
+        file = file.path(
+          "data",
+          paste0("chirps_daily_",max(yrs),".csv")
+        )
+      )
     }
   ) %>%
   list_rbind()
+
+
+# # started at 2:10 pm
+# df_rainfall_adm <- unique(tic_dekad_labelled$vrt$dekad_abbr) %>%
+#   map(
+#     \(dekad_tmp){
+#       cat("downloading data for year ", dekad_tmp,"\n")
+#       tic_temp <- tic_dekad_labelled %>%
+#         filter(
+#           dekad_abbr == dekad_tmp
+#         )
+#       ee_extract_tidy(
+#         x = tic_temp,
+#         y = fc_aoi,
+#         scale = 5566,
+#         stat = "mean",
+#         via = "drive"
+#       )
+#     }
+#   ) %>%
+#   list_rbind()
 # df_rainfall_adm <- ee_extract_tidy(
 #   x = tic,
 #   y = fc_aoi,

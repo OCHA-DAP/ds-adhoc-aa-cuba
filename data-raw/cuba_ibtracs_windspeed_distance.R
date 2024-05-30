@@ -1,5 +1,5 @@
 # Requets for data set to see windspeed and distance of cyclones to Cuba
-library(dpyr)
+library(dplyr)
 
 IBTRACS_DIR <- file.path(
   Sys.getenv("AA_DATA_DIR_NEW"),
